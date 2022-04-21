@@ -1,11 +1,11 @@
 [package]
-name = "app"
+name = "chip8"
 version = "0.1.0"
 description = "A Tauri App"
-authors = ["you"]
+authors = ["James D. Hasselman"]
 license = ""
 repository = ""
-default-run = "app"
+default-run = "chip8"
 edition = "2021"
 rust-version = "1.57"
 
