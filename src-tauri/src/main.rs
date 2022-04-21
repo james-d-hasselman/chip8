@@ -23,6 +23,9 @@ use std::fs::File;
 use std::io::Read;
 use std::sync::Arc;
 use std::sync::Mutex;
+use std::sync::atomic::AtomicBool;
+use std::sync::atomic::Ordering;
+use std::thread::JoinHandle;
 use tauri::api::dialog::FileDialogBuilder;
 use tauri::utils::config::TauriConfig;
 use tauri::App;
@@ -287,9 +290,6 @@ impl Drop for TauriKeyboard {
     }
 }
 
-type InterpreterHandle = Arc<Mutex<Option<Interpreter>>>;
-type IsRunning = Arc<Mutex<bool>>;
-
 #[tauri::command]
 fn initialize_interpreter(
     app_handle: tauri::AppHandle,
@@ -303,48 +303,35 @@ fn initialize_interpreter(
     let display = TauriDisplay::new(window.clone());
     let keyboard = TauriKeyboard::new(app_handle.clone());
     let buzzer = JavaScriptAudio::new(window.clone());
-    *interpreter_state.interpreter.lock().unwrap() = Some(Interpreter::new(
+    let mut interpreter = Interpreter::new(
         Box::new(display),
         Box::new(buzzer),
         Box::new(keyboard),
         &rom,
-    ));
-    let mut is_running = interpreter_state.is_running.lock().unwrap();
-    *is_running = true;
-    window.emit("start", ());
+    );
+    interpreter_state.is_running.store(true, Ordering::Relaxed);
+    let thread_is_running = interpreter_state.is_running.clone();
+    *interpreter_state.interpreter_thread.lock().unwrap() = Some(std::thread::spawn(move || {
+        while thread_is_running.load(Ordering::Relaxed) {
+            interpreter.run_iteration();
+            std::thread::sleep(std::time::Duration::from_millis(2));
+        }
+    }));
     println!("initialized");
 }
 
 #[derive(Default)]
 struct InterpreterState {
-    interpreter: std::sync::Mutex<Option<Interpreter>>,
-    is_running: std::sync::Mutex<bool>,
-}
-// remember to call `.manage(MyState::default())`
-#[tauri::command]
-async fn run_iteration(state: tauri::State<'_, InterpreterState>) -> Result<bool, String> {
-    let is_running = *state.is_running.lock().unwrap();
-    if is_running {
-        let mut interpreter = state.interpreter.lock().unwrap();
-        let interpreter = interpreter.as_mut().unwrap();
-        interpreter.run_iteration();
-    }
-    Ok(is_running)
+    interpreter_thread: std::sync::Mutex<Option<JoinHandle<()>>>,
+    is_running: Arc<AtomicBool>
 }
 
-/*#[tauri::command]
-async fn run_iteration(
-    interpreter: State<'static, InterpreterHandle>,
-    is_running: State<'static, IsRunning>,
-) -> bool {
-    let is_running = *is_running.lock().unwrap();
-    if is_running {
-        let mut interpreter = interpreter.lock().unwrap();
-        let interpreter = interpreter.as_mut().unwrap();
-        interpreter.run_iteration();
+impl Drop for InterpreterState {
+    fn drop(&mut self) {
+        self.is_running.store(false, Ordering::Relaxed);
+        self.interpreter_thread.lock().unwrap().take().map(JoinHandle::join);
     }
-    return is_running;
-}*/
+}
 
 fn main() {
     let load_rom = CustomMenuItem::new("load_rom".to_string(), "Load Rom...");
@@ -368,8 +355,8 @@ fn main() {
             Ok(())
         })
         .manage(InterpreterState {
-            interpreter: Mutex::new(None),
-            is_running: Mutex::new(false)
+            interpreter_thread: Mutex::new(None),
+            is_running: Arc::new(AtomicBool::new(false)),
         })
         .menu(menu)
         .on_menu_event(|event: WindowMenuEvent| match event.menu_item_id() {
@@ -379,8 +366,7 @@ fn main() {
             "stop" => {
                 let window = event.window();
                 let interpreter_state = window.state::<InterpreterState>();
-                let mut is_running = interpreter_state.is_running.lock().unwrap();
-                *is_running = false;
+                interpreter_state.is_running.store(false, Ordering::Relaxed);
                 event.window().emit("stop", ()).unwrap();
             }
             "load_rom" => {
@@ -400,7 +386,6 @@ fn main() {
         })
         .invoke_handler(tauri::generate_handler![
             initialize_interpreter,
-            run_iteration
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");
