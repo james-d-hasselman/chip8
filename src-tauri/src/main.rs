@@ -198,14 +198,17 @@ impl Buzzer for JavaScriptAudio {
 #[derive(Debug)]
 struct TauriKeyboard {
     keys: Arc<Mutex<[bool; 16]>>,
+    keyup_handler: Option<EventHandler>,
+    keydown_handler: Option<EventHandler>,
+    app_handle: AppHandle
 }
 
 impl TauriKeyboard {
     pub fn new(app_handle: AppHandle) -> Self {
         let keys = Arc::new(Mutex::new([false; 16]));
-        let keyboard = Self { keys: keys.clone() };
+        let mut keyboard = Self { keys: keys.clone(), keyup_handler: None, keydown_handler: None, app_handle };
         let keydown_keys = keys.clone();
-        app_handle.listen_global("keydown", move |event| {
+        keyboard.keydown_handler = Some(keyboard.app_handle.listen_global("keydown", move |event| {
             let mut keys = keydown_keys.lock().unwrap();
             let keydown: KeyDown = serde_json::from_str(event.payload().unwrap()).unwrap();
             match keydown.key.as_str() {
@@ -227,9 +230,9 @@ impl TauriKeyboard {
                 "KeyV" => keys[0xF] = true,
                 _ => (), // other keys don't matter
             }
-        });
+        }));
         let keyup_keys = keys.clone();
-        app_handle.listen_global("keyup", move |event| {
+        keyboard.keyup_handler = Some(keyboard.app_handle.listen_global("keyup", move |event| {
             let mut keys = keyup_keys.lock().unwrap();
             let keyup: KeyUp = serde_json::from_str(event.payload().unwrap()).unwrap();
             match keyup.key.as_str() {
@@ -251,7 +254,7 @@ impl TauriKeyboard {
                 "KeyV" => keys[0xF] = false,
                 _ => (), // other keys don't matter
             }
-        });
+        }));
         keyboard
     }
 }
@@ -274,6 +277,13 @@ impl Keyboard for TauriKeyboard {
             }
             None
         }
+    }
+}
+
+impl Drop for TauriKeyboard {
+    fn drop(&mut self) {
+        self.app_handle.unlisten(self.keydown_handler.unwrap());
+        self.app_handle.unlisten(self.keyup_handler.unwrap());
     }
 }
 
