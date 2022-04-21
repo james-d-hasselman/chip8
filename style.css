@@ -22,38 +22,11 @@ body {
   width: 100%;
 }
 
-/*#display {
+#display {
   display: flex;
   flex-direction: column;
   justify-content: center;
   align-items: center;
-}*/
-
-#display {
-  display: flex;
-  flex-direction: column;
-  height: 100%;
-  width: 100%;
-  max-width: 200vh;
-  max-height: 50vw;
-}
-
-.row {
-  display: flex;
-  height: 100%;
-  width: 100%;
-  flex-grow: 1;
-}
-
-.pixel {
-  height: 100%;
-  width: 100%;
-  flex-grow: 1;
-  background-color: black;
-}
-
-.on {
-  background-color: white;
 }
 
 /*canvas {

@@ -4,7 +4,8 @@ import { invoke } from '@tauri-apps/api/tauri';
 
 let application = document.querySelector('#application');
 let game_container = document.querySelector('#game-container');
-let display = document.querySelector('#display');
+let canvas = document.querySelector('#display');
+let display = canvas.getContext('2d');
 
 window.addEventListener('keydown', e => emit('keydown', { key: `${e.code}` }));
 window.addEventListener('keyup', e => emit('keyup', { key: `${e.code}` }));
@@ -49,16 +50,18 @@ const unlisten_animation_frame = listen('animation-frame', event => {
 const unlisten_draw_sprite = listen('draw-sprite', event => {
   let update_x = event.payload.x;
   let update_y = event.payload.y;
-  let update = event.payload.update; 
+  let update = event.payload.update;
+  let pixel_size = Math.floor(canvas.height / 32);
   update.forEach((byte, y_offset) => {
     byte.forEach((bit, x_offset) => {
-      let x = ((update_x + x_offset) % 64);
-      let y = ((update_y + y_offset) % 32);
+      let x = ((update_x + x_offset) % 64) * pixel_size;
+      let y = ((update_y + y_offset) % 32) * pixel_size;
       if (bit) {
-        display.children[y].children[x].classList.add("on");
+        display.fillStyle = "#FFFFFF";
       } else {
-        display.children[y].children[x].classList.remove("on");
+        display.fillStyle = "#000000";
       }
+      display.fillRect(x, y, pixel_size, pixel_size)
     })
   })
 })
@@ -71,25 +74,32 @@ let interpreter_loop = () => {
   }
 }
 
-let clearDisplay = () => {
-  for(let y = 0; y < 32; y++) {
-    for(let x = 0; x < 64; x++) {
-      display.children[y].children[x].classList.remove("on");
-    }
+let resizeDisplay = () => {
+  let height = game_container.offsetHeight;
+  let width = game_container.offsetWidth;
+  let aspect_ratio = width / height;
+  if (aspect_ratio > 2.0) {
+    let width = height * 2.0;
+    canvas.style.width = width;
+    canvas.width = width;
+    canvas.style.height = height;
+    canvas.height = height;
+  } else {
+    let height = width / 2.0;
+    canvas.style.width = width;
+    canvas.width = width;
+    canvas.style.height = height;
+    canvas.height = height;
   }
+};
+
+let clearDisplay = () => {
+  display.fillStyle = "#000000";
+  display.fillRect(0.0, 0.0, canvas.width, canvas.height);
 }
 
+window.addEventListener('resize', resizeDisplay);
 window.onload = () => {
-  for(var y = 0; y < 32; y++)
-  {
-    let row = document.createElement('div');
-    row.classList.add("row")
-    for(var x = 0; x < 64; x++) {
-      let pixel = document.createElement('div');
-      pixel.classList.add("pixel");
-      row.appendChild(pixel);
-    }
-    display.appendChild(row);
-  }
+  resizeDisplay();
   clearDisplay();
 }
