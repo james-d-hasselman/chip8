@@ -8,6 +8,7 @@ let canvas = document.querySelector('#display');
 let display = canvas.getContext('2d', { alpha: false });
 let canvas_buffer = document.createElement('canvas');
 let display_buffer = canvas_buffer.getContext('2d', { alpha: false });
+var pixel_size = 0;
 
 window.addEventListener('keydown', e => emit('keydown', { key: `${e.code}` }));
 window.addEventListener('keyup', e => emit('keyup', { key: `${e.code}` }));
@@ -32,7 +33,6 @@ const unlisten_draw_sprite = listen('draw-sprite', event => {
   let update_x = event.payload.x;
   let update_y = event.payload.y;
   let update = event.payload.update;
-  let pixel_size = Math.floor(canvas.height / 32);
   update.forEach((byte, y_offset) => {
     byte.forEach((bit, x_offset) => {
       let x = ((update_x + x_offset) % 64) * pixel_size;
@@ -51,29 +51,32 @@ const unlisten_draw_sprite = listen('draw-sprite', event => {
 });
 
 let resizeDisplay = () => {
-  let height = game_container.offsetHeight;
-  let width = game_container.offsetWidth;
+  var height = Math.floor(game_container.offsetHeight);
+  var width = Math.floor(game_container.offsetWidth);
   let aspect_ratio = width / height;
   if (aspect_ratio > 2.0) {
-    let width = height * 2.0;
-    canvas.style.width = width;
+    height = Math.floor(height / 32) * 32;
+    width = height * 2;
+    canvas.style.width = width + 'px';
     canvas.width = width;
-    canvas.style.height = height;
+    canvas.style.height = height + 'px';
     canvas.height = height;
   } else {
-    let height = width / 2.0;
-    canvas.style.width = width;
+    width = Math.floor(width / 64) * 64;
+    height = width / 2;
+    canvas.style.width = width + 'px';
     canvas.width = width;
-    canvas.style.height = height;
+    canvas.style.height = height + 'px';
     canvas.height = height;
   }
+  pixel_size = Math.floor(canvas.height / 32);
   canvas_buffer.width = canvas.width;
   canvas_buffer.height = canvas.height;
 };
 
 let clearDisplay = () => {
   display_buffer.fillStyle = "#000000";
-  display_buffer.fillRect(0.0, 0.0, canvas.width, canvas.height);
+  display_buffer.fillRect(0.0, 0.0, canvas_buffer.width, canvas_buffer.height);
   window.requestAnimationFrame(() => {
     display.drawImage(canvas_buffer, 0, 0);
   });
