@@ -14,6 +14,7 @@ window.addEventListener('keydown', e => emit('keydown', { key: `${e.code}` }));
 window.addEventListener('keyup', e => emit('keyup', { key: `${e.code}` }));
 
 const unlisten_rom_loaded = listen('rom-loaded', event => {
+  clearDisplay();
   invoke('initialize_interpreter', { rom: event.payload });
 })
 
@@ -48,6 +49,10 @@ const unlisten_draw_sprite = listen('draw-sprite', event => {
   window.requestAnimationFrame(() => {
     display.drawImage(canvas_buffer, 0, 0);
   })
+});
+
+const unlisten_clear = listen('clear', event => {
+  clearDisplay();
 });
 
 let resizeDisplay = () => {

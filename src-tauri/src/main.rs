@@ -21,10 +21,10 @@ use serde::__private::de::InternallyTaggedUnitVisitor;
 use std::borrow::Borrow;
 use std::fs::File;
 use std::io::Read;
-use std::sync::Arc;
-use std::sync::Mutex;
 use std::sync::atomic::AtomicBool;
 use std::sync::atomic::Ordering;
+use std::sync::Arc;
+use std::sync::Mutex;
 use std::thread::JoinHandle;
 use tauri::api::dialog::FileDialogBuilder;
 use tauri::utils::config::TauriConfig;
@@ -94,23 +94,6 @@ impl TauriDisplay {
                 .map(|c| c.to_digit(10).expect("Memory corrupted, crashing") == 1)
                 .collect()
         };
-        /*let x_coordinates = {
-            let mut x_coordinates: [u16; 8] = [0; 8];
-            for i in 0..8 as u16 {
-                x_coordinates[usize::from(i)] = (u16::from(x) + i) % 64;
-            }
-            x_coordinates
-        };
-        let mut collision = 0;
-        for i in 0..8 {
-            let vertical_offset = 64 * u16::from(y);
-            let coordinate = x_coordinates[i] + vertical_offset;
-            let target_bit = &mut self.buffer[usize::from(coordinate)];
-            if bits[i] && *target_bit {
-                collision = 1;
-            }
-            *target_bit = *target_bit ^ bits[i];
-        }*/
 
         let mut collision = 0;
         let mut updated_pixels = [false; 8];
@@ -138,7 +121,7 @@ impl TauriDisplay {
 impl Display for TauriDisplay {
     fn clear(&mut self) {
         self.buffer = [[false; 64]; 32];
-        self.refresh();
+        self.window.emit("clear", ());
     }
 
     fn draw(&mut self, x: u8, y: u8, sprite: &graphics::Sprite) -> u8 {
@@ -154,8 +137,6 @@ impl Display for TauriDisplay {
         }
 
         self.window.emit("draw-sprite", JsSprite { x, y, update });
-
-        //self.refresh();
 
         return collision;
     }
@@ -203,37 +184,43 @@ struct TauriKeyboard {
     keys: Arc<Mutex<[bool; 16]>>,
     keyup_handler: Option<EventHandler>,
     keydown_handler: Option<EventHandler>,
-    app_handle: AppHandle
+    app_handle: AppHandle,
 }
 
 impl TauriKeyboard {
     pub fn new(app_handle: AppHandle) -> Self {
         let keys = Arc::new(Mutex::new([false; 16]));
-        let mut keyboard = Self { keys: keys.clone(), keyup_handler: None, keydown_handler: None, app_handle };
+        let mut keyboard = Self {
+            keys: keys.clone(),
+            keyup_handler: None,
+            keydown_handler: None,
+            app_handle,
+        };
         let keydown_keys = keys.clone();
-        keyboard.keydown_handler = Some(keyboard.app_handle.listen_global("keydown", move |event| {
-            let mut keys = keydown_keys.lock().unwrap();
-            let keydown: KeyDown = serde_json::from_str(event.payload().unwrap()).unwrap();
-            match keydown.key.as_str() {
-                "Digit1" => keys[1] = true,
-                "Digit2" => keys[2] = true,
-                "Digit3" => keys[3] = true,
-                "Digit4" => keys[0xC] = true,
-                "KeyQ" => keys[4] = true,
-                "KeyW" => keys[5] = true,
-                "KeyE" => keys[6] = true,
-                "KeyR" => keys[0xD] = true,
-                "KeyA" => keys[7] = true,
-                "KeyS" => keys[8] = true,
-                "KeyD" => keys[9] = true,
-                "KeyF" => keys[0xE] = true,
-                "KeyZ" => keys[0xA] = true,
-                "KeyX" => keys[0] = true,
-                "KeyC" => keys[0xB] = true,
-                "KeyV" => keys[0xF] = true,
-                _ => (), // other keys don't matter
-            }
-        }));
+        keyboard.keydown_handler =
+            Some(keyboard.app_handle.listen_global("keydown", move |event| {
+                let mut keys = keydown_keys.lock().unwrap();
+                let keydown: KeyDown = serde_json::from_str(event.payload().unwrap()).unwrap();
+                match keydown.key.as_str() {
+                    "Digit1" => keys[1] = true,
+                    "Digit2" => keys[2] = true,
+                    "Digit3" => keys[3] = true,
+                    "Digit4" => keys[0xC] = true,
+                    "KeyQ" => keys[4] = true,
+                    "KeyW" => keys[5] = true,
+                    "KeyE" => keys[6] = true,
+                    "KeyR" => keys[0xD] = true,
+                    "KeyA" => keys[7] = true,
+                    "KeyS" => keys[8] = true,
+                    "KeyD" => keys[9] = true,
+                    "KeyF" => keys[0xE] = true,
+                    "KeyZ" => keys[0xA] = true,
+                    "KeyX" => keys[0] = true,
+                    "KeyC" => keys[0xB] = true,
+                    "KeyV" => keys[0xF] = true,
+                    _ => (), // other keys don't matter
+                }
+            }));
         let keyup_keys = keys.clone();
         keyboard.keyup_handler = Some(keyboard.app_handle.listen_global("keyup", move |event| {
             let mut keys = keyup_keys.lock().unwrap();
@@ -323,13 +310,17 @@ fn initialize_interpreter(
 #[derive(Default)]
 struct InterpreterState {
     interpreter_thread: std::sync::Mutex<Option<JoinHandle<()>>>,
-    is_running: Arc<AtomicBool>
+    is_running: Arc<AtomicBool>,
 }
 
 impl Drop for InterpreterState {
     fn drop(&mut self) {
         self.is_running.store(false, Ordering::Relaxed);
-        self.interpreter_thread.lock().unwrap().take().map(JoinHandle::join);
+        self.interpreter_thread
+            .lock()
+            .unwrap()
+            .take()
+            .map(JoinHandle::join);
     }
 }
 
@@ -370,23 +361,29 @@ fn main() {
                 event.window().emit("stop", ()).unwrap();
             }
             "load_rom" => {
+                let window = event.window();
+                let interpreter_state = window.state::<InterpreterState>();
+                interpreter_state.is_running.store(false, Ordering::Relaxed);
                 FileDialogBuilder::new().pick_file(move |path| {
-                    event
+                    match path {
+                      Some(path) => {
+                          event
                         .window()
                         .emit(
                             "rom-loaded",
                             Rom {
-                                path: path.unwrap().into_os_string().into_string().unwrap(),
+                                path: path.into_os_string().into_string().unwrap(),
                             },
                         )
                         .unwrap();
+                      }
+                      _ => ()
+                    }
                 });
             }
             _ => {}
         })
-        .invoke_handler(tauri::generate_handler![
-            initialize_interpreter,
-        ])
+        .invoke_handler(tauri::generate_handler![initialize_interpreter,])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");
 }
