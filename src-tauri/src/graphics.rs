@@ -115,14 +115,6 @@ mod tests {
     use crate::graphics::Display;
     use crate::graphics::Sprite;
 
-    #[ignore]
-    fn test_console_display_refresh() {
-        let mut x = ConsoleDisplay {
-            buffer: [true; 2048],
-        };
-        x.refresh();
-    }
-
     #[test]
     fn test_console_display_clear() {
         let mut x = ConsoleDisplay {

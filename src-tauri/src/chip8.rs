@@ -11,38 +11,14 @@ use crate::registers::DelayTimer;
 use crate::registers::ProgramCounter;
 use crate::registers::Register;
 use crate::registers::SoundTimer;
-use crate::time::Timer;
 use byteorder::BigEndian;
 use byteorder::ReadBytesExt;
-use std::rc::Rc;
 use std::sync::Arc;
 use std::sync::atomic::AtomicBool;
 use std::sync::atomic::Ordering;
 use std::thread;
 use std::thread::JoinHandle;
 use std::time::Duration;
-
-struct SquareWave {
-    phase_inc: f32,
-    phase: f32,
-    volume: f32,
-}
-
-/*impl AudioCallback for SquareWave {
-    type Channel = f32;
-
-    fn callback(&mut self, out: &mut [f32]) {
-        // Generate a square wave
-        for x in out.iter_mut() {
-            *x = if self.phase <= 0.5 {
-                self.volume
-            } else {
-                -self.volume
-            };
-            self.phase = (self.phase + self.phase_inc) % 1.0;
-        }
-    }
-}*/
 
 pub struct Interpreter {
     memory: Memory,
@@ -66,11 +42,6 @@ impl Interpreter {
         keyboard_device: Box<dyn Keyboard>,
         rom: &Vec<u8>,
     ) -> Self {
-        /*let desired_spec = AudioSpecDesired {
-            freq: Some(48000),
-            channels: Some(1),
-            samples: None,
-        };*/
         let mut memory = memory::Memory::new();
         memory.load_rom(rom);
         let delay_timer = DelayTimer::new();
@@ -311,7 +282,7 @@ impl Interpreter {
                         Interpreter::set_delay_timer(&mut self.delay_timer, register_x);
                     }
                     0xF018 => {
-                        //self.set_sound_timer(&mut self.sound_timer, register_x, &self.buzzer);
+                        Interpreter::set_sound_timer(&mut self.sound_timer, register_x, &self.buzzer);
                     }
                     0xF01E => {
                         Interpreter::add_address(&mut self.address_register, register_x);
@@ -346,56 +317,11 @@ impl Interpreter {
             }
         }
 
-        // figure out something for keyboard
-        //self.keyboard = Keyboard::from(&self.event_pump.keyboard_state());
-
         let sound_timer_value = self.sound_timer.lock().unwrap();
         if *sound_timer_value == 0 {
             self.buzzer.pause();
         }
-        // Adjust for interpreter speed
-        //::std::thread::sleep(std::time::Duration::from_millis(2));
     }
-
-    /*pub fn run(&self, rom: &Vec<u8>) {
-        let thread_sound_timer = SoundTimer::clone(&self.sound_timer);
-        let thread_delay_timer = DelayTimer::clone(&self.delay_timer);
-        let timer_subsystem = self.sdl_context.timer().unwrap();
-        let _timer = timer_subsystem.add_timer(
-            16,
-            Box::new(move || {
-                {
-                    let mut sound_timer_value = thread_sound_timer.lock().unwrap();
-                    if *sound_timer_value > 0 {
-                        *sound_timer_value -= 1;
-                    }
-                }
-                {
-                    let mut delay_timer_value = thread_delay_timer.lock().unwrap();
-                    if *delay_timer_value > 0 {
-                        *delay_timer_value -= 1;
-                    }
-                }
-                16
-            }),
-        );
-        self.memory.load_rom(rom);
-        'interpreter: loop {
-            for event in self.event_pump.poll_iter() {
-                match event {
-                    Event::Quit { .. } => break 'interpreter,
-                    Event::Window {
-                        win_event: WindowEvent::Resized(_, _),
-                        ..
-                    } => {
-                        self.display_screen.refresh();
-                    }
-                    _ => {}
-                }
-            }
-            self.run_iteration();
-        }
-    }*/
 
     // 0nnn - SYS addr
     // Jump to a machine code routine at nnn.
@@ -657,7 +583,7 @@ impl Interpreter {
 
     // Fx18 - LD ST, Vx
     // Set sound timer = Vx.
-    fn set_sound_timer(self, sound_timer: &SoundTimer, vx: &Register, buzzer: &Box<dyn Buzzer>) {
+    fn set_sound_timer(sound_timer: &SoundTimer, vx: &Register, buzzer: &Box<dyn Buzzer>) {
         let mut sound_timer_value = sound_timer.lock().unwrap();
         *sound_timer_value = u8::from(*vx);
         buzzer.play();

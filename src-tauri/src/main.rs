@@ -13,11 +13,8 @@ mod time;
 
 use audio::Buzzer;
 use chip8::Interpreter;
-use graphics::draw_byte;
 use graphics::Display;
 use keyboard::Keyboard;
-use serde::__private::de::InternallyTaggedUnitVisitor;
-use std::borrow::Borrow;
 use std::fs::File;
 use std::io::Read;
 use std::sync::atomic::AtomicBool;
@@ -26,20 +23,12 @@ use std::sync::Arc;
 use std::sync::Mutex;
 use std::thread::JoinHandle;
 use tauri::api::dialog::FileDialogBuilder;
-use tauri::utils::config::TauriConfig;
-use tauri::App;
 use tauri::AppHandle;
-use tauri::Event;
 use tauri::EventHandler;
 use tauri::Manager;
 use tauri::Window;
 use tauri::WindowMenuEvent;
 use tauri::{CustomMenuItem, Menu, MenuItem, State, Submenu};
-use timer;
-use timer::Guard;
-use timer::Timer;
-
-use crate::graphics::Sprite;
 
 #[derive(Clone, serde::Serialize)]
 struct StopPayload {
@@ -120,7 +109,12 @@ impl TauriDisplay {
 impl Display for TauriDisplay {
     fn clear(&mut self) {
         self.buffer = [[false; 64]; 32];
-        self.window.emit("clear", ());
+        match self.window.emit("clear", ()) {
+            Err(error) => {
+                eprintln!("Error sending 'clear' event: {}", error);
+            }
+            _ => ()
+        }
     }
 
     fn draw(&mut self, x: u8, y: u8, sprite: &graphics::Sprite) -> u8 {
@@ -135,7 +129,12 @@ impl Display for TauriDisplay {
             update.push(updated_pixels.to_vec());
         }
 
-        self.window.emit("draw-sprite", JsSprite { x, y, update });
+        match self.window.emit("draw-sprite", JsSprite { x, y, update }) {
+            Err(error) => {
+                eprintln!("Error sending 'draw-sprite' event: {}", error);
+            }
+            _ => ()
+        }
 
         return collision;
     }
@@ -330,10 +329,6 @@ fn main() {
     );
     let menu = Menu::new().add_submenu(interpreter_menu);
     tauri::Builder::default()
-        .setup(move |app| {
-            let keyboard = TauriKeyboard::new(app.app_handle());
-            Ok(())
-        })
         .manage(InterpreterState {
             interpreter_thread: Mutex::new(None),
             is_running: Arc::new(AtomicBool::new(false)),
