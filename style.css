@@ -29,24 +29,6 @@ body {
   align-items: center;
 }
 
-/*canvas {
-  background-color: red;
-  width: 100vw;
-  height: 50vw;
-  max-height: 95vh;
-  max-width: 200vh;
-  margin: auto;
-  position: absolute;
-  top: 40px;
-  bottom: 0;
-  left: 0;
-  right: 0;
-}*/
-
 canvas {
-  background-color: red;
-  /*width: 100vw;
-  height: 50vw;
-  max-height: 100vh;
-  max-width: 200vh;*/
+  background-color: black;
 }

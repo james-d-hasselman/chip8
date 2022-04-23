@@ -12,7 +12,6 @@ mod registers;
 mod time;
 
 use audio::Buzzer;
-//use chip8::Interpreter;
 use chip8::Interpreter;
 use graphics::draw_byte;
 use graphics::Display;
@@ -142,14 +141,6 @@ impl Display for TauriDisplay {
     }
 
     fn refresh(&mut self) {
-        /*self.window
-        .emit(
-            "animation-frame",
-            Frame {
-                buffer: self.buffer.into(),
-            },
-        )
-        .unwrap();*/
     }
 }
 
@@ -327,7 +318,6 @@ impl Drop for InterpreterState {
 fn main() {
     let load_rom = CustomMenuItem::new("load_rom".to_string(), "Load Rom...");
     let stop = CustomMenuItem::new("stop".to_string(), "Stop");
-    let reset = CustomMenuItem::new("reset".to_string(), "Reset");
     let quit = CustomMenuItem::new("quit".to_string(), "Quit");
     let interpreter_menu = Submenu::new(
         "Interpreter",
@@ -335,7 +325,6 @@ fn main() {
             .add_item(load_rom)
             .add_native_item(MenuItem::Separator)
             .add_item(stop)
-            .add_item(reset)
             .add_native_item(MenuItem::Separator)
             .add_item(quit),
     );

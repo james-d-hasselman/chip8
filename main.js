@@ -2,7 +2,6 @@ import './style.css'
 import { emit, listen } from '@tauri-apps/api/event';
 import { invoke } from '@tauri-apps/api/tauri';
 
-let application = document.querySelector('#application');
 let game_container = document.querySelector('#game-container');
 let canvas = document.querySelector('#display');
 let display = canvas.getContext('2d', { alpha: false });
@@ -13,24 +12,24 @@ var pixel_size = 0;
 window.addEventListener('keydown', e => emit('keydown', { key: `${e.code}` }));
 window.addEventListener('keyup', e => emit('keyup', { key: `${e.code}` }));
 
-const unlisten_rom_loaded = listen('rom-loaded', event => {
+listen('rom-loaded', event => {
   clearDisplay();
   invoke('initialize_interpreter', { rom: event.payload });
 })
 
-const unlisten_stop = listen('stop', event => {
+listen('stop', () => {
   clearDisplay();
 })
 
-const unlisten_play_buzzer = listen('play-buzzer', event => {
+listen('play-buzzer', () => {
 
 })
 
-const unlisten_pause_buzzer = listen('pauze-buzzer', event => {
+listen('pauze-buzzer', () => {
 
 })
 
-const unlisten_draw_sprite = listen('draw-sprite', event => {
+listen('draw-sprite', event => {
   let update_x = event.payload.x;
   let update_y = event.payload.y;
   let update = event.payload.update;
@@ -51,7 +50,7 @@ const unlisten_draw_sprite = listen('draw-sprite', event => {
   })
 });
 
-const unlisten_clear = listen('clear', event => {
+listen('clear', () => {
   clearDisplay();
 });
 
