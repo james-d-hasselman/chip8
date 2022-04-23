@@ -294,7 +294,6 @@ fn initialize_interpreter(
             std::thread::sleep(std::time::Duration::from_millis(2));
         }
     }));
-    println!("initialized");
 }
 
 #[derive(Default)]
