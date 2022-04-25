@@ -510,7 +510,7 @@ impl Interpreter {
     // Cxkk - RND Vx, byte
     // Set Vx = random byte AND kk.
     fn random_and(vx: &mut Register, byte: u8) {
-        let random_value: u8 = 27;
+        let random_value: u8 = rand::random::<u8>();
         *vx = Register::from(byte & random_value);
     }
 
