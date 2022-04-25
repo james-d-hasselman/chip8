@@ -9,10 +9,11 @@ let canvas_buffer = document.createElement('canvas');
 let display_buffer = canvas_buffer.getContext('2d', { alpha: false });
 var pixel_size = 0;
 
-const AudioContext = window.AudioContext || window.webkitAudioContext;
+//const AudioContext = window.AudioContext || window.webkitAudioContext;
 var audio_context = null;
 var oscillator = null;
 var gain_node = null;
+var is_audio_started = false;
 
 window.addEventListener('keydown', e => emit('keydown', { key: `${e.code}` }));
 window.addEventListener('keyup', e => emit('keyup', { key: `${e.code}` }));
@@ -22,6 +23,10 @@ window.addEventListener('contextmenu', e => {
 });
 
 listen('rom-loaded', event => {
+  if (!is_audio_started) {
+    oscillator.start();
+    is_audio_started = true;
+  }
   clearDisplay();
   invoke('initialize_interpreter', { rom: event.payload });
 })
@@ -30,11 +35,11 @@ listen('stop', () => {
 })
 
 listen('play-buzzer', () => {
-  oscillator.start();
+  gain_node.gain.value = 0.005;
 })
 
-listen('pauze-buzzer', () => {
-  oscillator.stop();
+listen('pause-buzzer', () => {
+  gain_node.gain.value = 0.0;
 })
 
 listen('draw-sprite', event => {
@@ -103,7 +108,7 @@ window.onload = () => {
   oscillator.type = 'square';
   oscillator.frequency.setValueAtTime(600, audio_context.currentTime);
   gain_node = audio_context.createGain();
-  gain_node.gain.value = 0.2;
+  gain_node.gain.value = 0.0;
   oscillator.connect(gain_node);
   gain_node.connect(audio_context.destination);
 }
