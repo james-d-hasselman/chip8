@@ -291,7 +291,7 @@ fn initialize_interpreter(
     *interpreter_state.interpreter_thread.lock().unwrap() = Some(std::thread::spawn(move || {
         while thread_is_running.load(Ordering::Relaxed) {
             interpreter.run_iteration();
-            std::thread::sleep(std::time::Duration::from_millis(2));
+            std::thread::sleep(std::time::Duration::from_nanos(1000000));
         }
     }));
 }
