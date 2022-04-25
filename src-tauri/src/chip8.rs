@@ -100,7 +100,8 @@ impl Interpreter {
             code @ 0x0000..=0x0FFF
             | code @ 0x1000..=0x1FFF
             | code @ 0x2000..=0x2FFF
-            | code @ 0xA000..=0xAFFF => {
+            | code @ 0xA000..=0xAFFF 
+            | code @ 0xB000..=0xBFFF => {
                 let address = Address::from(0x0FFF & code);
                 match code >> 12 {
                     0x0 => {
