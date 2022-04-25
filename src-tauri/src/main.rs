@@ -9,7 +9,6 @@ mod graphics;
 mod keyboard;
 mod memory;
 mod registers;
-mod time;
 
 use audio::Buzzer;
 use chip8::Interpreter;
@@ -74,29 +73,6 @@ struct TauriDisplay {
 }
 
 impl TauriDisplay {
-    fn draw_byte(&mut self, x: u8, y: u8, byte: u8) -> (u8, [bool; 8]) {
-        let bits: Vec<bool> = {
-            let byte = byte;
-            (format!("{:08b}", byte))
-                .chars()
-                .map(|c| c.to_digit(10).expect("Memory corrupted, crashing") == 1)
-                .collect()
-        };
-
-        let mut collision = 0;
-        let mut updated_pixels = [false; 8];
-        for (x_offset, bit) in bits.iter().enumerate() {
-            let target_bit =
-                &mut self.buffer[usize::from(y)][usize::from((usize::from(x) + x_offset) % 64)];
-            if *bit && *target_bit {
-                collision = 1;
-            }
-            updated_pixels[x_offset] = *target_bit ^ *bit;
-            *target_bit = updated_pixels[x_offset];
-        }
-
-        return (collision, updated_pixels);
-    }
 
     fn new(window: tauri::Window) -> Self {
         Self {
@@ -118,16 +94,9 @@ impl Display for TauriDisplay {
     }
 
     fn draw(&mut self, x: u8, y: u8, sprite: &graphics::Sprite) -> u8 {
-        let mut collision = 0;
-        let mut update = Vec::<Vec<bool>>::new();
-        for (i, byte) in sprite.iter().enumerate() {
-            let i = i as u8;
-            let (result, updated_pixels) = self.draw_byte(x, ((y % 32) + i) % 32, *byte);
-            if result == 1 {
-                collision = 1;
-            }
-            update.push(updated_pixels.to_vec());
-        }
+        let mut new_buffer = self.buffer.clone();
+        let (collision, update) = self.draw_sprite(&mut new_buffer, x, y, &sprite);
+        self.buffer = new_buffer;
 
         match self.window.emit("draw-sprite", JsSprite { x, y, update }) {
             Err(error) => {

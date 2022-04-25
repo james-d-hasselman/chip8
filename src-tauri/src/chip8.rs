@@ -13,9 +13,9 @@ use crate::registers::Register;
 use crate::registers::SoundTimer;
 use byteorder::BigEndian;
 use byteorder::ReadBytesExt;
-use std::sync::Arc;
 use std::sync::atomic::AtomicBool;
 use std::sync::atomic::Ordering;
+use std::sync::Arc;
 use std::thread;
 use std::thread::JoinHandle;
 use std::time::Duration;
@@ -50,18 +50,20 @@ impl Interpreter {
         let thread_delay_timer = DelayTimer::clone(&delay_timer);
         let is_timer_running = Arc::new(AtomicBool::new(true));
         let thread_is_timer_running = is_timer_running.clone();
-        let timer = thread::spawn(move || while thread_is_timer_running.load(Ordering::Relaxed) {
-            thread::sleep(Duration::from_millis(16));
-            {
-                let mut sound_timer_value = thread_sound_timer.lock().unwrap();
-                if *sound_timer_value > 0 {
-                    *sound_timer_value -= 1;
+        let timer = thread::spawn(move || {
+            while thread_is_timer_running.load(Ordering::Relaxed) {
+                thread::sleep(Duration::from_millis(16));
+                {
+                    let mut sound_timer_value = thread_sound_timer.lock().unwrap();
+                    if *sound_timer_value > 0 {
+                        *sound_timer_value -= 1;
+                    }
                 }
-            }
-            {
-                let mut delay_timer_value = thread_delay_timer.lock().unwrap();
-                if *delay_timer_value > 0 {
-                    *delay_timer_value -= 1;
+                {
+                    let mut delay_timer_value = thread_delay_timer.lock().unwrap();
+                    if *delay_timer_value > 0 {
+                        *delay_timer_value -= 1;
+                    }
                 }
             }
         });
@@ -100,7 +102,7 @@ impl Interpreter {
             code @ 0x0000..=0x0FFF
             | code @ 0x1000..=0x1FFF
             | code @ 0x2000..=0x2FFF
-            | code @ 0xA000..=0xAFFF 
+            | code @ 0xA000..=0xAFFF
             | code @ 0xB000..=0xBFFF => {
                 let address = Address::from(0x0FFF & code);
                 match code >> 12 {
@@ -283,7 +285,11 @@ impl Interpreter {
                         Interpreter::set_delay_timer(&mut self.delay_timer, register_x);
                     }
                     0xF018 => {
-                        Interpreter::set_sound_timer(&mut self.sound_timer, register_x, &self.buzzer);
+                        Interpreter::set_sound_timer(
+                            &mut self.sound_timer,
+                            register_x,
+                            &self.buzzer,
+                        );
                     }
                     0xF01E => {
                         Interpreter::add_address(&mut self.address_register, register_x);
@@ -646,15 +652,19 @@ impl Drop for Interpreter {
     }
 }
 
-/*#[cfg(test)]
+#[cfg(test)]
 mod tests {
+    use crate::audio::Buzzer;
+    use crate::chip8::Interpreter;
+    use crate::keyboard::Keyboard;
     use crate::memory::Memory;
     use crate::memory::Stack;
-    use crate::Address;
-    use crate::AddressRegister;
-    use crate::Keyboard;
-    use crate::ProgramCounter;
-    use crate::Register;
+    use crate::registers::Address;
+    use crate::registers::AddressRegister;
+    use crate::registers::DelayTimer;
+    use crate::registers::ProgramCounter;
+    use crate::registers::Register;
+    use crate::registers::SoundTimer;
     use byteorder::BigEndian;
     use byteorder::ReadBytesExt;
 
@@ -668,35 +678,7 @@ mod tests {
         let instruction_code = instruction_code.read_u16::<BigEndian>().unwrap();
         assert_eq!(instruction_code, 0xF090);
     }
-    #[test]
-    fn memory_load() {
-        let memory = Memory::new();
-        let mut address_register = AddressRegister::new();
-        address_register.set(Address::from(0));
-        assert_eq!(
-            memory.load(&address_register, 5),
-            &[0xF0, 0x90, 0x90, 0x90, 0xF0]
-        );
-    }
-    // TODO improve testability
-    /*#[test]
-    fn memory_load_rom() {
-        let rom = vec![0xAA, 0xBB, 0xCC];
-        let mut memory = Memory::new();
-        memory.load_rom(&rom);
-        let mut memory_cmp = Memory::new();
-        assert_ne!(memory, memory_cmp);
-    }*/
-    // TODO improve testability
-    /*#[test]
-    fn memory_store() {
-        let data = [0xAA, 0xBB, 0xCC];
-        let mut memory = Memory::new();
-        let mut address_register = AddressRegister::new();
-        address_register.0 = 0x200;
-        memory.store(&address_register, &data);
-        assert_ne!(memory, Memory::new());
-    }*/
+
     #[test]
     fn stack_push() {
         let mut stack = Stack::new();
@@ -726,148 +708,139 @@ mod tests {
             _ => assert!(false),
         }
     }
-    // TODO make test friendly
-    /*fn clear() {
 
-    }*/
     #[test]
     fn test_return_subroutine() {
         let mut program_counter = ProgramCounter::new();
-        assert_eq!(program_counter, 0x200);
+        assert_eq!(program_counter.value, Address::from(0x200));
         let mut stack = Stack::new();
         stack.push(&Address::from(0xAAAA));
-        return_subroutine(&mut program_counter, &mut stack);
-        assert_eq!(program_counter, 0xAAAA);
+        Interpreter::return_subroutine(&mut program_counter, &mut stack);
+        assert_eq!(program_counter.value, Address::from(0xAAAA));
     }
     #[test]
     fn test_jump_location_address() {
         let mut program_counter = ProgramCounter::new();
         let address = Address::from(0xBBBB);
-        assert_eq!(program_counter, 0x200);
-        jump_location_address(&address, &mut program_counter);
-        assert_eq!(program_counter, 0xBBBB);
+        assert_eq!(program_counter.value, Address::from(0x200));
+        Interpreter::jump_location_address(&address, &mut program_counter);
+        assert_eq!(program_counter.value, Address::from(0xBBBB));
     }
     #[test]
     fn test_call_address() {
         let mut stack = Stack::new();
         let mut program_counter = ProgramCounter::new();
         let address = Address::from(0xCCCC);
-        assert_eq!(program_counter, 0x200);
+        assert_eq!(program_counter.value, Address::from(0x200));
         program_counter.set(Address::from(0xDDDD));
         match stack.peek() {
             None => assert!(true),
             _ => assert!(false),
         }
-        call_address(&mut stack, &mut program_counter, &address);
+        Interpreter::call_address(&mut stack, &mut program_counter, &address);
         match stack.peek() {
             Some(value) => assert_eq!(value, Address::from(0xDDDD)),
             None => assert!(false),
         }
-        assert_eq!(program_counter, Address::from(0xCCCC));
+        assert_eq!(program_counter.value, Address::from(0xCCCC));
     }
     #[test]
     fn test_skip_if_equal_byte() {
         let vx = Register::from(0xAB);
         let byte = 0xAB;
         let mut program_counter = ProgramCounter::new();
-        assert_eq!(program_counter, 0x200);
-        skip_if_equal_byte(&vx, byte, &mut program_counter);
-        assert_eq!(program_counter, 0x202);
+        assert_eq!(program_counter.value, Address::from(0x200));
+        Interpreter::skip_if_equal_byte(&vx, byte, &mut program_counter);
+        assert_eq!(program_counter.value, Address::from(0x202));
     }
     #[test]
     fn test_skip_if_not_equal_byte() {
         let vx = Register::from(0xAB);
         let byte = 0xAA;
         let mut program_counter = ProgramCounter::new();
-        assert_eq!(program_counter, 0x200);
-        skip_if_not_equal_byte(&vx, byte, &mut program_counter);
-        assert_eq!(program_counter, 0x202);
+        assert_eq!(program_counter.value, Address::from(0x200));
+        Interpreter::skip_if_not_equal_byte(&vx, byte, &mut program_counter);
+        assert_eq!(program_counter.value, Address::from(0x202));
     }
     #[test]
     fn test_skip_if_register_equal() {
         let vx = Register::from(0xAA);
         let vy = Register::from(0xAA);
         let mut program_counter = ProgramCounter::new();
-        assert_eq!(program_counter, 0x200);
-        skip_if_register_equal(&vx, &vy, &mut program_counter);
-        assert_eq!(program_counter, 0x202);
+        assert_eq!(program_counter.value, Address::from(0x200));
+        Interpreter::skip_if_register_equal(&vx, &vy, &mut program_counter);
+        assert_eq!(program_counter.value, Address::from(0x202));
     }
     #[test]
     fn test_load_byte() {
         let mut vx = Register::from(0);
         let byte = 0xEE;
-        load_byte(&mut vx, byte);
+        Interpreter::load_byte(&mut vx, byte);
         assert_eq!(vx, byte);
     }
     #[test]
     fn test_add() {
         let mut vx = Register::from(0);
         let byte = 5;
-        add(&mut vx, byte);
+        Interpreter::add(&mut vx, byte);
         assert_eq!(vx, 5);
     }
     #[test]
     fn test_load_register() {
         let mut vx = Register::from(0);
         let vy = Register::from(5);
-        load_register(&mut vx, &vy);
+        Interpreter::load_register(&mut vx, &vy);
         assert_eq!(vx, 5);
     }
     #[test]
     fn test_bitwise_or_register() {
         let mut vx = Register::from(0b11110000);
         let vy = Register::from(0b00001111);
-        bitwise_or_register(&mut vx, &vy);
+        Interpreter::bitwise_or_register(&mut vx, &vy);
         assert_eq!(vx, 0b11111111);
     }
     #[test]
     fn test_bitwise_and_register() {
         let mut vx = Register::from(0b11111110);
         let vy = Register::from(0b10000001);
-        bitwise_and_register(&mut vx, &vy);
+        Interpreter::bitwise_and_register(&mut vx, &vy);
         assert_eq!(vx, 0b10000000);
     }
     #[test]
     fn test_bitwise_xor_register() {
         let mut vx = Register::from(0b11110000);
         let vy = Register::from(0b00001111);
-        bitwise_xor_register(&mut vx, &vy);
+        Interpreter::bitwise_xor_register(&mut vx, &vy);
         assert_eq!(vx, 0b11111111);
     }
     #[test]
     fn test_add_carry() {
         let mut vx = Register::from(0xFF);
         let vy = Register::from(0x01);
-        let mut vf = Register::from(0x00);
-        vf = add_carry(&mut vx, &vy);
-        assert_eq!(vf, 1);
+        assert_eq!(Interpreter::add_carry(&mut vx, &vy), 1);
     }
     #[test]
     fn test_subtract_register() {
         let mut vx = Register::from(10);
         let vy = Register::from(9);
-        let mut vf = Register::from(0);
-        vf = subtract_register(&mut vx, &vy);
-        assert_eq!(vf, 1);
+        assert_eq!(Interpreter::subtract_register(&mut vx, &vy), 1);
     }
     #[test]
     fn test_shift_right() {
         let mut vx = Register::from(4);
-        shift_right(&mut vx);
+        Interpreter::shift_right(&mut vx);
         assert_eq!(vx, 2);
     }
     #[test]
     fn test_subtract_register_n() {
         let mut vx = Register::from(10);
         let vy = Register::from(9);
-        let mut vf = Register::from(0);
-        vf = subtract_register_n(&mut vx, &vy);
-        assert_eq!(vf, 0);
+        assert_eq!(Interpreter::subtract_register_n(&mut vx, &vy), 0);
     }
     #[test]
     fn test_shift_left() {
         let mut vx = Register::from(2);
-        shift_left(&mut vx);
+        Interpreter::shift_left(&mut vx);
         assert_eq!(vx, 4);
     }
     #[test]
@@ -875,168 +848,211 @@ mod tests {
         let vx = Register::from(0);
         let vy = Register::from(1);
         let mut program_counter = ProgramCounter::new();
-        assert_eq!(program_counter, 0x200);
-        skip_if_register_not_equal(&vx, &vy, &mut program_counter);
-        assert_eq!(program_counter, 0x202);
+        assert_eq!(program_counter.value, Address::from(0x200));
+        Interpreter::skip_if_register_not_equal(&vx, &vy, &mut program_counter);
+        assert_eq!(program_counter.value, Address::from(0x202));
     }
     #[test]
     fn test_set_i_address() {
         let mut i = AddressRegister::new();
-        assert_eq!(i, 0);
-        set_i_address(&mut i, &Address::from(0xBBBB));
-        assert_eq!(i, 0xBBBB);
+        let mut test_i = AddressRegister::new();
+        test_i.set(Address::from(0));
+        assert_eq!(i, test_i);
+        Interpreter::set_i_address(&mut i, &Address::from(0xBBBB));
+        test_i.set(Address::from(0xBBBB));
+        assert_eq!(i, test_i);
     }
     #[test]
     fn test_jump_location_address_register() {
         let v0 = Register::from(0xF1);
         let address = Address::from(0x400);
         let mut program_counter = ProgramCounter::new();
-        jump_location_address_register(&v0, &address, &mut program_counter);
-        assert_eq!(program_counter, 0x4F1);
+        Interpreter::jump_location_address_register(&v0, &address, &mut program_counter);
+        assert_eq!(program_counter.value, Address::from(0x4F1));
     }
     #[test]
     fn test_random_and() {
         let mut vx = Register::from(0xCD);
-        random_and(&mut vx, 0xA1);
+        Interpreter::random_and(&mut vx, 0xA1);
         assert_ne!(vx, 0xCD);
     }
 
-    // TODO make more test friendly
-    /*fn display() {
+    struct TestKeyboard {
+        keys: [bool; 16],
+    }
 
-    }*/
+    impl TestKeyboard {
+        fn new() -> Self {
+            Self { keys: [false; 16] }
+        }
+    }
 
-    // TODO figure out how to make this work again
-    /*#[test]
+    impl Keyboard for TestKeyboard {
+        fn is_key_down(&self, key: u8) -> bool {
+            self.keys[usize::from(key)]
+        }
+
+        fn get_pressed_key(&self) -> Option<u8> {
+            for (i, key) in self.keys.iter().enumerate() {
+                if *key {
+                    return Some(i as u8);
+                }
+            }
+            None
+        }
+    }
+    #[test]
     fn test_skip_if_key() {
         let vx = Register::from(15);
         let mut program_counter = ProgramCounter::new();
-        let mut keyboard = Keyboard::new();
-        keyboard.keys.insert(vx.0, true);
-        skip_if_key(&vx, &mut program_counter, &keyboard);
-        assert_eq!(program_counter.value.0, 0x202);
-    }*/
+        let mut keyboard = Box::new(TestKeyboard::new());
+        let value: u8 = vx.into();
+        keyboard.keys[usize::from(value)] = true;
+        let keyboard: Box<dyn Keyboard> = keyboard;
+        Interpreter::skip_if_key(&vx, &mut program_counter, &keyboard);
+        assert_eq!(program_counter.value, Address::from(0x202));
+    }
     #[test]
     fn test_skip_if_not_key() {
         let vx = Register::from(15);
         let mut program_counter = ProgramCounter::new();
-        let keyboard = Keyboard::new();
-        skip_if_not_key(&vx, &mut program_counter, &keyboard);
-        assert_eq!(program_counter, 0x202);
+        let keyboard: Box<dyn Keyboard> = Box::new(TestKeyboard::new());
+        Interpreter::skip_if_not_key(&vx, &mut program_counter, &keyboard);
+        assert_eq!(program_counter.value, Address::from(0x202));
     }
-    /*#[test]
+    #[test]
     fn test_load_delay_timer() {
         let mut vx = Register::from(66);
         let delay_timer = DelayTimer::new();
-        load_delay_timer(&mut vx, &delay_timer);
-        assert_eq!(vx.0, delay_timer.0);
-    }*/
+        Interpreter::load_delay_timer(&mut vx, &delay_timer);
+        let delay_timer_value = delay_timer.lock().unwrap();
+        let value: u8 = vx.into();
+        assert_eq!(value, *delay_timer_value);
+    }
 
-    // TODO figure out how to make this work again
-    /*#[test]
+    #[test]
     fn test_load_on_key() {
         let mut vx = Register::from(0);
-        let mut keyboard = Keyboard::new();
-        let x = 7 as u8;
-        keyboard.keys.insert(x, true);
+        let mut keyboard = TestKeyboard::new();
+        keyboard.keys[7] = true;
         let mut program_counter = ProgramCounter::new();
-        load_on_key(&mut vx, &keyboard, &mut program_counter);
-        assert_eq!(program_counter.value.0, 0x200);
-        assert_eq!(vx.0, 7);
-    }*/
-    /*#[test]
+        let keyboard: Box<dyn Keyboard> = Box::new(keyboard);
+        Interpreter::load_on_key(&mut vx, &keyboard, &mut program_counter);
+        assert_eq!(program_counter.value, Address::from(0x200));
+        assert_eq!(vx, 7);
+    }
+    #[test]
     fn test_set_delay_timer() {
         let mut delay_timer = DelayTimer::new();
         let vx = Register::from(6);
-        set_delay_timer(&mut delay_timer, &vx);
-        assert_eq!(delay_timer.0, 6);
-    }*/
+        Interpreter::set_delay_timer(&mut delay_timer, &vx);
+        let delay_timer_value = delay_timer.lock().unwrap();
+        assert_eq!(*delay_timer_value, 6);
+    }
 
-    // TODO make test friendly
-    /*fn test_set_sound_timer() {
-        set_sound_timer(&sound_timer, &vx, &buzzer)
-    }*/
+    pub struct TestBuzzer;
+
+    impl Buzzer for TestBuzzer {
+        fn initialize(self, _frequency: f32, _volume: f32) {}
+
+        fn play(&self) {}
+
+        fn pause(&self) {}
+    }
+
+    #[test]
+    fn test_set_sound_timer() {
+        let sound_timer = SoundTimer::new();
+        let vx = Register::from(6);
+        let buzzer: Box<dyn Buzzer> = Box::new(TestBuzzer {});
+        Interpreter::set_sound_timer(&sound_timer, &vx, &buzzer)
+    }
+
     #[test]
     fn test_add_address() {
         let mut i = AddressRegister::new();
         i.set(Address::from(0x0100));
         let vx = Register::from(0x20);
-        add_address(&mut i, &vx);
-        assert_eq!(i, 0x0120);
+        Interpreter::add_address(&mut i, &vx);
+        let mut test_i = AddressRegister::new();
+        test_i.set(Address::from(0x0120));
+        assert_eq!(i, test_i);
     }
     #[test]
     fn test_set_i_sprite() {
         let mut i = AddressRegister::new();
         let vx = Register::from(5);
-        set_i_sprite(&mut i, &vx);
-        assert_eq!(i, 25);
+        Interpreter::set_i_sprite(&mut i, &vx);
+        let mut test_i = AddressRegister::new();
+        test_i.set(Address::from(25));
+        assert_eq!(i, test_i);
     }
     #[test]
     fn test_load_bcd() {
         let mut memory = Memory::new();
         let vx = Register::from(123);
-        let i = AddressRegister::new();
+        let mut i = AddressRegister::new();
         i.set(Address::from(0x200));
-        load_bcd(&vx, &i, &mut memory);
+        Interpreter::load_bcd(&vx, &i, &mut memory);
         assert_eq!(memory.load(&i, 1)[0], 1);
-        let i = AddressRegister::new();
+        let mut i = AddressRegister::new();
         i.set(Address::from(0x201));
         assert_eq!(memory.load(&i, 1)[0], 2);
-        let i = AddressRegister::new();
+        let mut i = AddressRegister::new();
         i.set(Address::from(0x202));
         assert_eq!(memory.load(&i, 1)[0], 3);
     }
     #[test]
     fn test_load_range() {
-        let mut registers = vec![Register::from(9); 16];
-        let i = AddressRegister::new();
+        let registers = vec![Register::from(9); 16];
+        let mut i = AddressRegister::new();
         i.set(Address::from(0x500));
         let mut memory = Memory::new();
-        load_range(&registers[..], &i, &mut memory);
+        Interpreter::load_range(&registers[..], &i, &mut memory);
         assert_eq!(memory.load(&i, 1)[0], 9);
-        let i = AddressRegister::new();
+        let mut i = AddressRegister::new();
         i.set(Address::from(0x501));
         assert_eq!(memory.load(&i, 1)[0], 9);
-        let i = AddressRegister::new();
+        let mut i = AddressRegister::new();
         i.set(Address::from(0x502));
         assert_eq!(memory.load(&i, 1)[0], 9);
-        let i = AddressRegister::new();
+        let mut i = AddressRegister::new();
         i.set(Address::from(0x503));
         assert_eq!(memory.load(&i, 1)[0], 9);
-        let i = AddressRegister::new();
+        let mut i = AddressRegister::new();
         i.set(Address::from(0x504));
         assert_eq!(memory.load(&i, 1)[0], 9);
-        let i = AddressRegister::new();
+        let mut i = AddressRegister::new();
         i.set(Address::from(0x505));
         assert_eq!(memory.load(&i, 1)[0], 9);
-        let i = AddressRegister::new();
+        let mut i = AddressRegister::new();
         i.set(Address::from(0x506));
         assert_eq!(memory.load(&i, 1)[0], 9);
-        let i = AddressRegister::new();
+        let mut i = AddressRegister::new();
         i.set(Address::from(0x507));
         assert_eq!(memory.load(&i, 1)[0], 9);
-        let i = AddressRegister::new();
+        let mut i = AddressRegister::new();
         i.set(Address::from(0x508));
         assert_eq!(memory.load(&i, 1)[0], 9);
-        let i = AddressRegister::new();
+        let mut i = AddressRegister::new();
         i.set(Address::from(0x509));
         assert_eq!(memory.load(&i, 1)[0], 9);
-        let i = AddressRegister::new();
+        let mut i = AddressRegister::new();
         i.set(Address::from(0x50A));
         assert_eq!(memory.load(&i, 1)[0], 9);
-        let i = AddressRegister::new();
+        let mut i = AddressRegister::new();
         i.set(Address::from(0x50B));
         assert_eq!(memory.load(&i, 1)[0], 9);
-        let i = AddressRegister::new();
+        let mut i = AddressRegister::new();
         i.set(Address::from(0x50C));
         assert_eq!(memory.load(&i, 1)[0], 9);
-        let i = AddressRegister::new();
+        let mut i = AddressRegister::new();
         i.set(Address::from(0x50D));
         assert_eq!(memory.load(&i, 1)[0], 9);
-        let i = AddressRegister::new();
+        let mut i = AddressRegister::new();
         i.set(Address::from(0x50E));
         assert_eq!(memory.load(&i, 1)[0], 9);
-        let i = AddressRegister::new();
+        let mut i = AddressRegister::new();
         i.set(Address::from(0x50F));
         assert_eq!(memory.load(&i, 1)[0], 9);
     }
@@ -1044,12 +1060,12 @@ mod tests {
     fn test_load_range_registers() {
         let mut registers = vec![Register::from(0); 16];
         let i = AddressRegister::new();
-        let mut memory = Memory::new();
-        load_range_registers(&mut registers[0..5], &i, &memory);
+        let memory = Memory::new();
+        Interpreter::load_range_registers(&mut registers[0..5], &i, &memory);
         assert_eq!(registers[0], 0xF0);
         assert_eq!(registers[1], 0x90);
         assert_eq!(registers[2], 0x90);
         assert_eq!(registers[3], 0x90);
         assert_eq!(registers[4], 0xF0);
     }
-}*/
+}

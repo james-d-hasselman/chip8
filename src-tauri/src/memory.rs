@@ -3,6 +3,7 @@ use crate::registers::AddressRegister;
 use crate::registers::ProgramCounter;
 use std::io::Read;
 
+#[derive(Debug, PartialEq)]
 pub struct Memory {
     bytes: [u8; 4096],
 }
@@ -119,3 +120,33 @@ impl Stack {
         }
     }
 }
+
+#[test]
+fn memory_load_rom() {
+    let rom = vec![0xAA, 0xBB, 0xCC];
+    let mut memory = Memory::new();
+    memory.load_rom(&rom);
+    let memory_cmp = Memory::new();
+    assert_ne!(memory, memory_cmp);
+}
+
+#[test]
+    fn memory_load() {
+        let memory = Memory::new();
+        let mut address_register = AddressRegister::new();
+        address_register.set(Address::from(0));
+        assert_eq!(
+            memory.load(&address_register, 5),
+            &[0xF0, 0x90, 0x90, 0x90, 0xF0]
+        );
+    }
+    
+    #[test]
+    fn memory_store() {
+        let data = [0xAA, 0xBB, 0xCC];
+        let mut memory = Memory::new();
+        let mut address_register = AddressRegister::new();
+        address_register.set(Address::from(0x200));
+        memory.store(&address_register, &data);
+        assert_ne!(memory, Memory::new());
+    }

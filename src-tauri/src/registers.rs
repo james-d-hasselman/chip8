@@ -13,7 +13,7 @@ use std::sync::LockResult;
 use std::sync::Mutex;
 use std::sync::MutexGuard;
 
-#[derive(Copy, Clone)]
+#[derive(Copy, Clone, PartialEq, Debug)]
 pub struct Address(u16);
 
 impl Address {
@@ -60,7 +60,7 @@ impl std::ops::SubAssign<u16> for Address {
     }
 }
 
-#[derive(Copy, Clone)]
+#[derive(Copy, Clone, PartialEq, Debug)]
 pub struct AddressRegister(u16);
 
 impl AddressRegister {
@@ -85,7 +85,7 @@ impl From<AddressRegister> for usize {
     }
 }
 
-#[derive(Copy, Clone)]
+#[derive(Copy, Clone, Debug)]
 pub struct Register(u8);
 
 impl Register {
@@ -205,6 +205,7 @@ impl ShrAssign<usize> for Register {
     }
 }
 
+#[derive(Debug, PartialEq)]
 pub struct ProgramCounter {
     pub value: Address,
 }
@@ -240,6 +241,8 @@ impl From<&ProgramCounter> for usize {
         program_counter.value.into()
     }
 }
+
+#[derive(Debug)]
 pub struct DelayTimer(Arc<Mutex<u8>>);
 
 impl DelayTimer {

@@ -28,6 +28,50 @@ pub trait Display: Send + Sync {
     fn clear(&mut self);
     fn draw(&mut self, x: u8, y: u8, sprite: &Sprite) -> u8;
     fn refresh(&mut self);
+    fn draw_byte(
+        &self,
+        buffer: &mut [[bool; 64]; 32],
+        x: u8,
+        y: u8,
+        byte: u8,
+    ) -> (u8, [bool; 8]) {
+        let bits: Vec<bool> = {
+            let byte = byte;
+            (format!("{:08b}", byte))
+                .chars()
+                .map(|c| c.to_digit(10).expect("Memory corrupted, crashing") == 1)
+                .collect()
+        };
+
+        let mut collision = 0;
+        let mut updated_pixels = [false; 8];
+        for (x_offset, bit) in bits.iter().enumerate() {
+            let target_bit =
+                &mut buffer[usize::from(y)][usize::from((usize::from(x) + x_offset) % 64)];
+            if *bit && *target_bit {
+                collision = 1;
+            }
+            updated_pixels[x_offset] = *target_bit ^ *bit;
+            *target_bit = updated_pixels[x_offset];
+        }
+
+        return (collision, updated_pixels);
+    }
+    fn draw_sprite(&mut self, buffer: &mut [[bool; 64]; 32], x: u8, y: u8, sprite: &Sprite) -> (u8, Vec::<Vec<bool>>) {
+        let mut collision = 0;
+        let mut update = Vec::<Vec<bool>>::new();
+        for (i, byte) in sprite.iter().enumerate() {
+            let i = i as u8;
+            let (result, updated_pixels) =
+                self.draw_byte(buffer, x, ((y % 32) + i) % 32, *byte);
+            if result == 1 {
+                collision = 1;
+            }
+            update.push(updated_pixels.to_vec());
+        }
+
+        return (collision, update);
+    }
 }
 
 pub struct ConsoleDisplay {
@@ -104,8 +148,6 @@ impl Display for ConsoleDisplay {
         }
     }
 }
-
-
 
 #[cfg(test)]
 mod tests {
