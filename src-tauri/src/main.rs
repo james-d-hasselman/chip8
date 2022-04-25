@@ -122,7 +122,7 @@ impl Display for TauriDisplay {
         let mut update = Vec::<Vec<bool>>::new();
         for (i, byte) in sprite.iter().enumerate() {
             let i = i as u8;
-            let (result, updated_pixels) = self.draw_byte(x, (y + i) % 32, *byte);
+            let (result, updated_pixels) = self.draw_byte(x, ((y % 32) + i) % 32, *byte);
             if result == 1 {
                 collision = 1;
             }
@@ -291,7 +291,7 @@ fn initialize_interpreter(
     *interpreter_state.interpreter_thread.lock().unwrap() = Some(std::thread::spawn(move || {
         while thread_is_running.load(Ordering::Relaxed) {
             interpreter.run_iteration();
-            std::thread::sleep(std::time::Duration::from_nanos(1000000));
+            std::thread::sleep(std::time::Duration::from_nanos(2000000));
         }
     }));
 }
