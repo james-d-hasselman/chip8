@@ -27,10 +27,10 @@ let display_buffer = canvas_buffer.getContext('2d', { alpha: false });
 var pixel_size = 0;
 
 //const AudioContext = window.AudioContext || window.webkitAudioContext;
-var audio_context = null;
+/*var audio_context = null;
 var oscillator = null;
 var gain_node = null;
-var is_audio_started = false;
+var is_audio_started = false;*/
 
 window.addEventListener('keydown', e => emit('keydown', { key: `${e.code}` }));
 window.addEventListener('keyup', e => emit('keyup', { key: `${e.code}` }));
@@ -40,10 +40,10 @@ window.addEventListener('keyup', e => emit('keyup', { key: `${e.code}` }));
 });*/
 
 listen('rom-loaded', event => {
-  if (!is_audio_started) {
+  /*if (!is_audio_started) {
     oscillator.start();
     is_audio_started = true;
-  }
+  }*/
   clearDisplay();
   invoke('initialize_interpreter', { rom: event.payload });
 })
@@ -52,11 +52,11 @@ listen('stop', () => {
 })
 
 listen('play-buzzer', () => {
-  gain_node.gain.value = 0.005;
+  //gain_node.gain.value = 0.005;
 })
 
 listen('pause-buzzer', () => {
-  gain_node.gain.value = 0.0;
+  //gain_node.gain.value = 0.0;
 })
 
 listen('draw-sprite', event => {
@@ -120,12 +120,12 @@ window.addEventListener('resize', resizeDisplay);
 window.onload = () => {
   resizeDisplay();
   clearDisplay();
-  audio_context = new AudioContext();
+  /*audio_context = new AudioContext();
   oscillator = audio_context.createOscillator();
   oscillator.type = 'square';
   oscillator.frequency.setValueAtTime(600, audio_context.currentTime);
   gain_node = audio_context.createGain();
   gain_node.gain.value = 0.0;
   oscillator.connect(gain_node);
-  gain_node.connect(audio_context.destination);
+  gain_node.connect(audio_context.destination);*/
 }
