@@ -34,10 +34,10 @@ var is_audio_started = false;
 
 window.addEventListener('keydown', e => emit('keydown', { key: `${e.code}` }));
 window.addEventListener('keyup', e => emit('keyup', { key: `${e.code}` }));
-window.addEventListener('contextmenu', e => {
+/*window.addEventListener('contextmenu', e => {
   e.preventDefault();
   return false;
-});
+});*/
 
 listen('rom-loaded', event => {
   if (!is_audio_started) {
