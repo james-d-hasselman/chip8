@@ -2,7 +2,7 @@ name: "publish"
 on:
   push:
     tags:
-      - chip8-v*
+      - chip8-v0.1.0
 
 jobs:
   publish-tauri:
